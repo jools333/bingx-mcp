@@ -9,6 +9,7 @@ Signature generation follows the official BingX API documentation:
 6. For POST: send as form-encoded body.
 """
 
+import asyncio
 import hashlib
 import hmac
 import time
@@ -22,7 +23,7 @@ from src.utils.config import config
 from src.utils.ratelimit import rate_limiter
 from src.utils.retry import retry
 
-DEFAULT_TIMEOUT = 15.0
+DEFAULT_TIMEOUT = 10.0
 
 
 class BingXClient:
@@ -150,6 +151,16 @@ class BingXClient:
                 if json_data.get("code") != 0:
                     error_code = json_data.get("code", "unknown")
                     error_msg = json_data.get("msg", "Unknown error")
+
+                    if error_code in (100412, 100001):
+                        retry_after = float(json_data.get("retryAfter", json_data.get("retry_after", 2)))
+                        logger.warning(
+                            f"Rate limited [{error_code}] on {base_url}: {error_msg}. "
+                            f"Waiting {retry_after:.1f}s..."
+                        )
+                        await asyncio.sleep(min(retry_after, 10))
+                        raise httpx.NetworkError(f"Rate limit [{error_code}]: {error_msg}")
+
                     raise RuntimeError(f"BingX API error [{error_code}]: {error_msg}")
 
                 return json_data.get("data", json_data)
@@ -178,7 +189,7 @@ class BingXClient:
         async def _do() -> dict[str, Any]:
             return await self._request("GET", path, params)
 
-        return await retry(_do)
+        return await retry(_do, retryable_exceptions=(httpx.TimeoutException, httpx.NetworkError))
 
     async def post(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """Execute a signed POST request.
@@ -193,7 +204,7 @@ class BingXClient:
         async def _do() -> dict[str, Any]:
             return await self._request("POST", path, params)
 
-        return await retry(_do)
+        return await retry(_do, retryable_exceptions=(httpx.TimeoutException, httpx.NetworkError))
 
     async def delete(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """Execute a signed DELETE request.
@@ -208,4 +219,4 @@ class BingXClient:
         async def _do() -> dict[str, Any]:
             return await self._request("DELETE", path, params)
 
-        return await retry(_do)
+        return await retry(_do, retryable_exceptions=(httpx.TimeoutException, httpx.NetworkError))

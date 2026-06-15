@@ -12,9 +12,9 @@ T = TypeVar("T")
 
 async def retry(
     func: Callable[[], Awaitable[T]],
-    max_retries: int = 3,
+    max_retries: int = 2,
     base_delay: float = 1.0,
-    max_delay: float = 30.0,
+    max_delay: float = 10.0,
     jitter: bool = True,
     retryable_exceptions: tuple[type[Exception], ...] = (Exception,),
 ) -> T:

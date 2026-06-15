@@ -14,7 +14,7 @@ class RateLimiter:
 
     def __init__(
         self,
-        default_rate: int = 5,
+        default_rate: int = 10,
         default_period: float = 1.0,
     ) -> None:
         """Initialize the rate limiter.
